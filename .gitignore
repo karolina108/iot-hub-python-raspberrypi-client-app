@@ -99,3 +99,4 @@ ENV/
 
 # mypy
 .mypy_cache/
+/iot-hub-python-raspberrypi-client-app.iml

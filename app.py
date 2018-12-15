@@ -10,11 +10,9 @@ import sys
 from iothub_client import IoTHubClient, IoTHubClientError, IoTHubTransportProvider, IoTHubClientResult
 from iothub_client import IoTHubMessage, IoTHubMessageDispositionResult, IoTHubError, DeviceMethodReturnValue
 import config as config
-from BME280SensorSimulator import BME280SensorSimulator
-import RPi.GPIO as GPIO
-from Adafruit_BME280 import *
 import re
 from telemetry import Telemetry
+from sense_hat import SenseHat
 
 # HTTP options
 # Because it can poll "after 9 seconds" polls will happen effectively
@@ -74,10 +72,9 @@ if not is_correct_connection_string():
     telemetry.send_telemetry_data(None, EVENT_FAILED, "Device connection string is not correct.")
     sys.exit(0)
 
-MSG_TXT = "{\"deviceId\": \"Raspberry Pi - Python\",\"temperature\": %f,\"humidity\": %f}"
+MSG_TXT = "{\"deviceId\": \"rbpi-108\",\"temperature\": %f,\"humidity\": %f,\"pressure\": %f}"
 
-GPIO.setmode(GPIO.BCM)
-GPIO.setup(config.GPIO_PIN_ADDRESS, GPIO.OUT)
+sense = SenseHat()
 
 def receive_message_callback(message, counter):
     global RECEIVE_CALLBACKS
@@ -192,22 +189,23 @@ def iothub_client_sample_run():
             reported_state = "{\"newState\":\"standBy\"}"
             client.send_reported_state(reported_state, len(reported_state), send_reported_state_callback, SEND_REPORTED_STATE_CONTEXT)
 
-        if not config.SIMULATED_DATA:
-            sensor = BME280(address = config.I2C_ADDRESS)
-        else:
-            sensor = BME280SensorSimulator()
-
         telemetry.send_telemetry_data(parse_iot_hub_name(), EVENT_SUCCESS, "IoT hub connection is established")
+
         while True:
             global MESSAGE_COUNT,MESSAGE_SWITCH
             if MESSAGE_SWITCH:
                 # send a few messages every minute
                 print ( "IoTHubClient sending %d messages" % MESSAGE_COUNT )
-                temperature = sensor.read_temperature()
-                humidity = sensor.read_humidity()
+
+                temperature = round(sense.get_temperature(), 2)
+                humidity = round(sense.get_humidity(), 2)
+                pressure = round(sense.get_pressure(), 2)
+
                 msg_txt_formatted = MSG_TXT % (
                     temperature,
-                    humidity)
+                    humidity,
+                    pressure)
+
                 print (msg_txt_formatted)
                 message = IoTHubMessage(msg_txt_formatted)
                 # optional: assign ids
@@ -235,9 +233,9 @@ def iothub_client_sample_run():
     print_last_message_time(client)
 
 def led_blink():
-    GPIO.output(config.GPIO_PIN_ADDRESS, GPIO.HIGH)
+    sense.show_lettter("!", (0, 0, 255))
     time.sleep(config.BLINK_TIMESPAN / 1000.0)
-    GPIO.output(config.GPIO_PIN_ADDRESS, GPIO.LOW)
+    sense.clear()
 
 def usage():
     print ( "Usage: iothub_client_sample.py -p <protocol> -c <connectionstring>" )
